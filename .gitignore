@@ -1,0 +1,79 @@
+# -------- Python --------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# -------- Virtual Environment --------
+venv/
+env/
+ENV/
+.env
+
+# -------- IDE --------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# -------- Data directories (keep structure only) --------
+data/event_photos/*
+!data/event_photos/.gitkeep
+
+data/selfies/*
+!data/selfies/.gitkeep
+
+data/embeddings/*
+!data/embeddings/.gitkeep
+
+data/temp_uploads/*
+!data/temp_uploads/.gitkeep
+
+# -------- FAISS / Embeddings --------
+*.index
+
+# -------- Databases / Metadata --------
+*.db
+*.sqlite
+*.sqlite3
+metadata.json
+
+# -------- Uploads --------
+*.zip
+
+# -------- Models (InsightFace auto-downloads) --------
+models/
+*.onnx
+*.params
+
+# -------- Logs --------
+*.log
+
+# -------- OS --------
+.DS_Store
+Thumbs.db
+
+# -------- Jupyter --------
+.ipynb_checkpoints/
+
+# -------- Streamlit --------
+.streamlit/
+
+# -------- Extra data folders --------
+data/event_photos_heic/
+
+data/**/*.jpg
+data/**/*.jpeg
+data/**/*.png
+data/**/*.heic
+data/**/*.HEIC

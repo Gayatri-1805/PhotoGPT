@@ -1,0 +1,21 @@
+# Core Dependencies
+numpy==1.24.3
+opencv-python==4.8.1.78
+Pillow==10.1.0
+
+# Face Detection (Windows-safe)
+mediapipe==0.10.9
+
+# Deep Learning (CLIP)
+torch==2.1.0
+torchvision==0.16.0
+open-clip-torch==2.24.0
+
+# Vector Search
+faiss-cpu==1.7.4
+
+# Progress and Utilities
+tqdm==4.66.1
+
+# Web UI
+streamlit==1.28.0
