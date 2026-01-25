@@ -1,6 +1,4 @@
-"""
-Event Photo Finder - Register with selfie and search by name.
-"""
+
 
 import streamlit as st
 import os
@@ -119,10 +117,13 @@ def main():
     # Modern Header
     st.markdown("""
     <div class="main-header">
-        <h1>📸 PhotoGPT - AI Event Photo Finder</h1>
-        <p style="font-size: 1.2rem; margin-top: 0.5rem;">🎯 Register your face once, find all your event photos instantly!</p>
+        <h1>📸 PhotoGPT </h1>
+        <p style="font-size: 1.2rem; margin-top: 0.5rem;"> Find your photos using natural language</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Quick workflow guide
+    
     
     # Enhanced Sidebar
     with st.sidebar:
@@ -157,7 +158,7 @@ def main():
         st.markdown("### 📑 Navigation")
         tab_selection = st.radio(
             "Choose action:",
-            ["🔍 Search by Name", "👤 Register New Person"],
+            ["🔍 Search by Name", "🎨 Semantic Search", "👤 Register New Person"],
             label_visibility="collapsed"
         )
     
@@ -206,11 +207,11 @@ def main():
                 image = Image.open(uploaded_file)
                 st.image(image, caption="✅ Preview", use_container_width=True)
             else:
-                st.info("👆 Click above to upload your selfie")
+                st.info("Click above to upload your selfie")
         
         with col2:
             st.markdown("#### 2️⃣ Enter Your Details")
-            st.caption("✍️ This name will be used for searching")
+            st.caption("This name will be used for searching")
             person_name = st.text_input(
                 "Name",
                 placeholder="e.g., John Smith",
@@ -254,10 +255,183 @@ def main():
             elif person_name:
                 st.warning("Please upload a selfie")
     
+    # TAB: Semantic Search
+    elif tab_selection == "🎨 Semantic Search":
+        st.markdown("### 🎨 Semantic Photo Search")
+        st.markdown("🔍 Describe what you're looking for in natural language - no face registration needed!")
+        
+        # Semantic search input
+        st.markdown("#### ✍️ Enter Your Query")
+        col1, col2, col3 = st.columns([5, 2, 1])
+        
+        with col1:
+            semantic_query = st.text_input(
+                "Describe what you're looking for",
+                value=st.session_state.get('semantic_query', ''),
+                placeholder="e.g., people dancing at sunset, group photo outdoors, eating food...",
+                key="semantic_query_input",
+                label_visibility="collapsed"
+            )
+        
+        with col2:
+            semantic_search_button = st.button("🔍 Search", type="primary", use_container_width=True, key="semantic_search_btn")
+        
+        with col3:
+            if st.button("🔄", use_container_width=True, help="Clear search", key="clear_semantic"):
+                st.session_state.semantic_matches = None
+                st.session_state.semantic_query = ""
+                st.rerun()
+        
+    
+        
+        # Perform semantic search
+        if semantic_search_button and semantic_query:
+            st.session_state.semantic_query = semantic_query
+            
+            # Initialize retriever
+            try:
+                with st.spinner("Loading AI vision models..."):
+                    retriever = PhotoRetriever(index_path, metadata_path)
+            except Exception as e:
+                st.error(f"Error loading models: {str(e)}")
+                return
+            
+            # Check if index was built in full_image mode
+            if len(retriever.index_manager.metadata) > 0:
+                mode = retriever.index_manager.metadata[0].get('mode', 'face')
+                if mode != 'full_image':
+                    st.error("❌ Semantic search requires the index to be built in 'full_image' mode!")
+                    st.info("💡 To enable semantic search, rebuild your index:")
+                    st.code("python src/offline_indexing.py --event-photos-dir data/event_photos --output-dir data/embeddings --mode full_image")
+                    return
+            
+            # Perform semantic search
+            with st.spinner(f"Searching for: '{semantic_query}'..."):
+                st.info(f"🔍 Analyzing {retriever.index_manager.index.ntotal} photos with AI vision...")
+                
+                result = retriever.find_photos(
+                    text_query=semantic_query,
+                    similarity_threshold=similarity_threshold
+                )
+                st.session_state.semantic_matches = result
+            st.rerun()
+        
+        # Display semantic search results
+        if st.session_state.get('semantic_matches') is not None:
+            result = st.session_state.semantic_matches
+            
+            st.divider()
+            st.subheader("📸 Matching Photos")
+            
+            if not result['success']:
+                st.warning(result['message'])
+                st.info("💡 Tips to improve results:")
+                st.markdown("""
+                - Try lowering the similarity threshold in the sidebar
+                - Use different descriptive words
+                - Try broader or more specific queries
+                - Ensure your index was built in 'full_image' mode
+                """)
+            else:
+                # Success message
+                st.markdown(f"""
+                <div class="success-box">
+                    <h3>✅ {result['message']}</h3>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                query_text = result['query_info'].get('query_text', 'Unknown')
+                
+                # Enhanced Stats Cards
+                st.markdown("#### 📊 Search Results")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.markdown("""
+                    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem; border-radius: 10px; color: white; text-align: center;'>
+                        <h2 style='margin: 0;'>{}</h2>
+                        <p style='margin: 0.5rem 0 0 0; opacity: 0.9;'>Photos Found</p>
+                    </div>
+                    """.format(result['total_photos']), unsafe_allow_html=True)
+                with col2:
+                    avg_sim = sum(p['similarity'] for p in result['matches']) / len(result['matches'])
+                    st.markdown("""
+                    <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 1.5rem; border-radius: 10px; color: white; text-align: center;'>
+                        <h2 style='margin: 0;'>{:.1%}</h2>
+                        <p style='margin: 0.5rem 0 0 0; opacity: 0.9;'>Avg Relevance</p>
+                    </div>
+                    """.format(avg_sim), unsafe_allow_html=True)
+                with col3:
+                    best_sim = max(p['similarity'] for p in result['matches'])
+                    st.markdown("""
+                    <div style='background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 1.5rem; border-radius: 10px; color: white; text-align: center;'>
+                        <h2 style='margin: 0;'>{:.1%}</h2>
+                        <p style='margin: 0.5rem 0 0 0; opacity: 0.9;'>Best Match</p>
+                    </div>
+                    """.format(best_sim), unsafe_allow_html=True)
+                
+                st.caption(f"🔍 Query: **\"{query_text}\"**")
+                
+                # Download all button
+                if len(result['matches']) > 0:
+                    all_paths = [p['image_path'] for p in result['matches']]
+                    zip_data = create_zip(all_paths)
+                    
+                    query_safe = semantic_query.replace(' ', '_')[:30]
+                    
+                    st.download_button(
+                        label=f"⬇️ Download All {result['total_photos']} Matching Photos as ZIP",
+                        data=zip_data,
+                        file_name=f"semantic_search_{query_safe}.zip",
+                        mime="application/zip",
+                        type="primary",
+                        use_container_width=True
+                    )
+                
+                st.divider()
+                st.markdown(f"### 📸 Photo Gallery ({result['total_photos']} results)")
+                
+                # Display photos
+                for i, photo in enumerate(result['matches']):
+                    with st.container():
+                        st.markdown("<div class='photo-card'>", unsafe_allow_html=True)
+                        
+                        col1, col2 = st.columns([2.5, 1])
+                        
+                        with col1:
+                            try:
+                                if os.path.exists(photo['image_path']):
+                                    img = Image.open(photo['image_path'])
+                                    st.image(img, caption=f"Photo {i+1} - {os.path.basename(photo['image_path'])}", use_container_width=True)
+                            except Exception as e:
+                                st.error(f"Error loading image: {str(e)}")
+                        
+                        with col2:
+                            st.markdown(f"##### 🖼️ Photo #{i+1}")
+                            st.markdown(f"**🎯 Relevance:** {photo['similarity']:.1%}")
+                            
+                            # Progress bar for relevance
+                            st.progress(photo['similarity'])
+                            
+                            st.markdown(f"**📄 File:** {os.path.basename(photo['image_path'])}")
+                            
+                            # Download button
+                            if os.path.exists(photo['image_path']):
+                                with open(photo['image_path'], 'rb') as f:
+                                    st.download_button(
+                                        label="⬇️ Download",
+                                        data=f.read(),
+                                        file_name=os.path.basename(photo['image_path']),
+                                        mime="image/jpeg",
+                                        key=f"dl_semantic_{i}",
+                                        use_container_width=True
+                                    )
+                        
+                        st.markdown("</div>", unsafe_allow_html=True)
+    
     # TAB: Search by Name
-    else:
+    elif tab_selection == "🔍 Search by Name":
         st.markdown("### 🔍 Find Event Photos by Name")
-        st.markdown("🎯 Click a name below or type to search for someone's event photos.")
+        st.markdown("a name below or type to search for someone's event photos.")
         
         # Get registered names
         registered_names = person_manager.get_all_names()
@@ -282,8 +456,9 @@ def main():
         
         st.divider()
         
-        # Enhanced search input
-        st.markdown("#### 🔎 Custom Search")
+        # Search input
+        st.markdown("#### 🔎 Search")
+        
         col1, col2, col3 = st.columns([5, 2, 1])
         
         with col1:
@@ -302,6 +477,7 @@ def main():
             if st.button("🔄", use_container_width=True, help="Clear search"):
                 st.session_state.matches = None
                 st.session_state.search_name = ""
+                st.session_state.activity_query = ""
                 st.rerun()
         
         # Perform search
@@ -331,7 +507,7 @@ def main():
                     st.error(f"Error loading models: {str(e)}")
                     return
                 
-                # Search using person's face embedding from registration
+                # Regular face search - all photos
                 with st.spinner(f"Searching event photos for {profile['name']}..."):
                     st.info(f"🔍 Matching {profile['name']}'s face against {retriever.index_manager.index.ntotal} indexed faces from event photos...")
                     
@@ -412,7 +588,15 @@ def main():
                     )
                 
                 st.divider()
-                st.markdown(f"### 📸 Event Photos Gallery ({result['total_photos']} results)")
+                
+                # Check if this is activity search
+                is_activity_search = result['query_info'].get('query_type') == 'person_activity'
+                activity_name = result['query_info'].get('activity', '') if is_activity_search else None
+                
+                if is_activity_search and activity_name:
+                    st.markdown(f"### 📸 Photos of {person_searched} {activity_name} ({result['total_photos']} results)")
+                else:
+                    st.markdown(f"### 📸 Event Photos Gallery ({result['total_photos']} results)")
                 
                 # Display photos with enhanced cards
                 for i, photo in enumerate(result['matches']):
@@ -423,26 +607,40 @@ def main():
                         
                         with col1:
                             try:
-                                img_with_boxes = draw_bounding_boxes(photo['image_path'], photo['faces'])
-                                st.image(img_with_boxes, caption=f"Event Photo {i+1} - {os.path.basename(photo['image_path'])}", use_container_width=True)
+                                # For activity search, show full image; for face search, show bounding boxes
+                                if is_activity_search or 'faces' not in photo:
+                                    if os.path.exists(photo['image_path']):
+                                        img = Image.open(photo['image_path'])
+                                        st.image(img, caption=f"Photo {i+1} - {os.path.basename(photo['image_path'])}", use_container_width=True)
+                                else:
+                                    img_with_boxes = draw_bounding_boxes(photo['image_path'], photo['faces'])
+                                    st.image(img_with_boxes, caption=f"Event Photo {i+1} - {os.path.basename(photo['image_path'])}", use_container_width=True)
                             except Exception as e:
                                 st.error(f"Error loading image: {str(e)}")
                         
                         with col2:
                             st.markdown(f"##### 🖼️ Photo #{i+1}")
-                            st.markdown(f"**🎯 Confidence:** {photo['max_similarity']:.1%}")
+                            st.markdown(f"**🎯 Overall Score:** {photo['max_similarity']:.1%}")
                             
                             # Progress bar for confidence
                             st.progress(photo['max_similarity'])
                             
-                            st.markdown(f"**👥 Faces Detected:** {photo['num_matches']}")
-                            
-                            # Show face details
-                            if photo['num_matches'] > 1:
-                                st.info(f"💡 Multiple matches in this photo")
+                            # Show detailed scores for activity search
+                            if is_activity_search:
+                                if 'face_similarity' in photo and 'activity_similarity' in photo:
+                                    st.caption(f"👤 Face match: {photo['face_similarity']:.1%}")
+                                    st.caption(f"🎬 Activity match: {photo['activity_similarity']:.1%}")
+                            else:
+                                st.markdown(f"**👥 Faces Detected:** {photo.get('num_matches', 1)}")
+                                
+                                # Show face details
+                                if photo.get('num_matches', 1) > 1:
+                                    st.info(f"💡 Multiple matches in this photo")
                             
                             st.markdown(f"**📄 File:** {os.path.basename(photo['image_path'])}")
-                            st.caption(f"Avg: {photo['avg_similarity']:.1%}")
+                            
+                            if 'avg_similarity' in photo and not is_activity_search:
+                                st.caption(f"Avg: {photo['avg_similarity']:.1%}")
                             
                             # Download button
                             if os.path.exists(photo['image_path']):

@@ -324,6 +324,124 @@ class PhotoRetriever:
         
         return result
     
+    def find_person_doing_activity(
+        self,
+        person_embedding: np.ndarray,
+        activity_description: str,
+        person_name: str = None,
+        face_threshold: float = 0.5,
+        activity_threshold: float = 0.25,
+        max_results: int = 100
+    ) -> Dict:
+        """
+        Find photos where a specific person is doing a particular activity.
+        
+        Combines face recognition with activity detection:
+        1. Find photos containing the person's face
+        2. Re-rank by how well they match the activity description
+        
+        Args:
+            person_embedding: Face embedding of the person to find
+            activity_description: What the person is doing (e.g., "running", "eating")
+            person_name: Name of the person (for display)
+            face_threshold: Minimum similarity for face matching
+            activity_threshold: Minimum similarity for activity matching
+            max_results: Maximum results to return
+            
+        Returns:
+            Dictionary with matched photos ranked by combined score
+        """
+        result = {
+            'success': False,
+            'message': '',
+            'query_info': {},
+            'matches': [],
+            'total_photos': 0
+        }
+        
+        print(f"\n🔍 Searching for {person_name if person_name else 'person'} doing: '{activity_description}'")
+        
+        # Step 1: Find all photos containing this person
+        print(f"\n📍 Step 1: Finding photos with {person_name if person_name else 'this person'}...")
+        face_matches = self.index_manager.search_with_threshold(
+            person_embedding,
+            similarity_threshold=face_threshold,
+            max_results=max_results * 3  # Get more candidates
+        )
+        
+        if len(face_matches) == 0:
+            result['message'] = f"No photos found containing {person_name if person_name else 'this person'}"
+            return result
+        
+        # Get unique photo paths
+        candidate_photos = set()
+        for match in face_matches:
+            candidate_photos.add(match['metadata']['image_path'])
+        
+        print(f"✓ Found {len(candidate_photos)} photos containing {person_name if person_name else 'the person'}")
+        
+        # Step 2: Score each photo by activity
+        print(f"\n📍 Step 2: Analyzing activity '{activity_description}' in each photo...")
+        activity_embedding = self.face_processor.encode_text(activity_description)
+        
+        scored_photos = []
+        for img_path in candidate_photos:
+            # Get full image embedding for activity matching
+            try:
+                img_embedding = self.face_processor.get_full_image_embedding(img_path)
+                
+                # Compute similarity between image and activity description
+                activity_score = np.dot(img_embedding, activity_embedding)
+                
+                # Get face score for this photo
+                face_score = max([m['similarity'] for m in face_matches 
+                                 if m['metadata']['image_path'] == img_path])
+                
+                # Combined score: weighted average
+                # Emphasize activity match slightly more since face was already filtered
+                combined_score = (0.4 * face_score) + (0.6 * activity_score)
+                
+                if activity_score >= activity_threshold:
+                    scored_photos.append({
+                        'image_path': img_path,
+                        'face_similarity': face_score,
+                        'activity_similarity': activity_score,
+                        'combined_score': combined_score,
+                        'max_similarity': combined_score,
+                        'num_matches': 1
+                    })
+            except Exception as e:
+                print(f"⚠ Warning: Could not analyze {os.path.basename(img_path)}: {str(e)}")
+                continue
+        
+        if len(scored_photos) == 0:
+            result['message'] = f"Found {person_name if person_name else 'the person'} in photos, but none match '{activity_description}'. Try a different activity or lower the threshold."
+            return result
+        
+        # Sort by combined score
+        scored_photos.sort(key=lambda x: x['combined_score'], reverse=True)
+        
+        # Limit results
+        scored_photos = scored_photos[:max_results]
+        
+        print(f"✓ Found {len(scored_photos)} photos where {person_name if person_name else 'person'} is {activity_description}")
+        
+        # Prepare result
+        result['success'] = True
+        result['matches'] = scored_photos
+        result['total_photos'] = len(scored_photos)
+        result['message'] = f"Found {len(scored_photos)} photo(s) of {person_name if person_name else 'person'} {activity_description}"
+        result['query_info'] = {
+            'query_type': 'person_activity',
+            'person_name': person_name,
+            'activity': activity_description,
+            'face_threshold': face_threshold,
+            'activity_threshold': activity_threshold
+        }
+        
+        print(f"✅ {result['message']}")
+        return result
+    
     def get_match_summary(self, result: Dict) -> str:
         """
         Generate a human-readable summary of match results.

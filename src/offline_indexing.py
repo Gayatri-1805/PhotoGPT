@@ -159,7 +159,25 @@ def process_event_photos(
 def main():
     """Main function with argument parsing."""
     parser = argparse.ArgumentParser(
-        description='Offline indexing: Process event photos and build embeddings index'
+        description='Offline indexing: Process event photos and build embeddings index',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # For semantic search (text descriptions)
+  python src/offline_indexing.py --event-photos-dir data/event_photos --output-dir data/embeddings --mode full_image
+  
+  # For face recognition search
+  python src/offline_indexing.py --event-photos-dir data/event_photos --output-dir data/embeddings --mode face
+
+Modes:
+  full_image - Embeds entire images for semantic/text search
+             - Use this for queries like: "sunset", "people running", "beach scene"
+             - Slower indexing but enables natural language search
+  
+  face      - Detects and embeds individual faces for face matching
+             - Use this for: "Find all photos of John"
+             - Faster for person-specific searches
+        """
     )
     parser.add_argument(
         '--event-photos-dir',
@@ -178,7 +196,7 @@ def main():
         type=str,
         default='full_image',
         choices=['full_image', 'face'],
-        help='Indexing mode: full_image (for text search) or face (for face search)'
+        help='Indexing mode: full_image (semantic search) or face (face recognition) - default: full_image'
     )
     
     args = parser.parse_args()
