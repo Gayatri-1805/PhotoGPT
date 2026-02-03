@@ -205,7 +205,7 @@ def main():
             
             if uploaded_file is not None:
                 image = Image.open(uploaded_file)
-                st.image(image, caption="✅ Preview", use_container_width=True)
+                st.image(image, caption="✅ Preview", use_column_width=True)
             else:
                 st.info("Click above to upload your selfie")
         
@@ -306,15 +306,12 @@ def main():
                     return
             
             # Perform semantic search
-            with st.spinner(f"Searching for: '{semantic_query}'..."):
-                st.info(f"🔍 Analyzing {retriever.index_manager.index.ntotal} photos with AI vision...")
-                
+            with st.spinner(f"🔍 Searching for: '{semantic_query}'... (Analyzing {retriever.index_manager.index.ntotal} photos with AI vision)"):
                 result = retriever.find_photos(
                     text_query=semantic_query,
                     similarity_threshold=similarity_threshold
                 )
                 st.session_state.semantic_matches = result
-            st.rerun()
         
         # Display semantic search results
         if st.session_state.get('semantic_matches') is not None:
@@ -401,7 +398,7 @@ def main():
                             try:
                                 if os.path.exists(photo['image_path']):
                                     img = Image.open(photo['image_path'])
-                                    st.image(img, caption=f"Photo {i+1} - {os.path.basename(photo['image_path'])}", use_container_width=True)
+                                    st.image(img, caption=f"Photo {i+1} - {os.path.basename(photo['image_path'])}", use_column_width=True)
                             except Exception as e:
                                 st.error(f"Error loading image: {str(e)}")
                         
@@ -508,16 +505,13 @@ def main():
                     return
                 
                 # Regular face search - all photos
-                with st.spinner(f"Searching event photos for {profile['name']}..."):
-                    st.info(f"🔍 Matching {profile['name']}'s face against {retriever.index_manager.index.ntotal} indexed faces from event photos...")
-                    
+                with st.spinner(f"🔍 Searching event photos for {profile['name']}... (Matching against {retriever.index_manager.index.ntotal} indexed faces)"):
                     result = retriever.find_photos_by_embedding(
                         query_embedding=profile['embedding'],
                         similarity_threshold=similarity_threshold,
                         person_name=profile['name']
                     )
                     st.session_state.matches = result
-                st.rerun()
         
         # Display results
         if st.session_state.matches is not None:
@@ -611,10 +605,10 @@ def main():
                                 if is_activity_search or 'faces' not in photo:
                                     if os.path.exists(photo['image_path']):
                                         img = Image.open(photo['image_path'])
-                                        st.image(img, caption=f"Photo {i+1} - {os.path.basename(photo['image_path'])}", use_container_width=True)
+                                        st.image(img, caption=f"Photo {i+1} - {os.path.basename(photo['image_path'])}", use_column_width=True)
                                 else:
                                     img_with_boxes = draw_bounding_boxes(photo['image_path'], photo['faces'])
-                                    st.image(img_with_boxes, caption=f"Event Photo {i+1} - {os.path.basename(photo['image_path'])}", use_container_width=True)
+                                    st.image(img_with_boxes, caption=f"Event Photo {i+1} - {os.path.basename(photo['image_path'])}", use_column_width=True)
                             except Exception as e:
                                 st.error(f"Error loading image: {str(e)}")
                         
